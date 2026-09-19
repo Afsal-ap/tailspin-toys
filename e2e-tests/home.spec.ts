@@ -24,4 +24,17 @@ test.describe('Home Page', () => {
     // Check that the welcome message is present using more specific locator
     await expect(page.getByText('Find your next game! And maybe even back one! Explore our collection!')).toBeVisible();
   });
+
+  test('should paginate the featured games list', async ({ page }) => {
+    const visibleGameCards = page.locator('[data-testid="game-card"]:visible');
+
+    await expect(visibleGameCards).toHaveCount(6);
+    await expect(page.getByTestId('pagination-page-2')).toBeVisible();
+
+    await page.getByTestId('pagination-page-2').click();
+
+    await expect(page.getByTestId('pagination-page-2')).toHaveAttribute('aria-current', 'page');
+    await expect(visibleGameCards).toHaveCount(6);
+    await expect(page.getByTestId('pagination-summary')).toContainText('Showing 7-');
+  });
 });

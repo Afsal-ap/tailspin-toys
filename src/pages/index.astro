@@ -4,11 +4,12 @@ import GameCard from '../components/GameCard.astro';
 import PageHero from '../components/PageHero.astro';
 import EmptyState from '../components/EmptyState.astro';
 import { getDatabase } from '../lib/db';
-import { getAllGames } from '../lib/games';
+import { DEFAULT_PAGE_SIZE, getAllGames } from '../lib/games';
 
 export const prerender = true;
 
 const games = await getAllGames(getDatabase());
+const totalPages = Math.max(1, Math.ceil(games.length / DEFAULT_PAGE_SIZE));
 ---
 
 <Layout title="Tailspin Toys - Crowdfunding your new favorite game!">
@@ -24,10 +25,154 @@ const games = await getAllGames(getDatabase());
       {games.length === 0 ? (
         <EmptyState text="No games available at the moment." />
       ) : (
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6" data-testid="games-grid">
-          {games.map((game) => <GameCard game={game} />)}
-        </div>
+        <>
+          <div
+            class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
+            data-testid="games-grid"
+            data-page-size={DEFAULT_PAGE_SIZE}
+            data-total-pages={totalPages}
+          >
+            {games.map((game, index) => {
+              const pageNumber = Math.floor(index / DEFAULT_PAGE_SIZE) + 1;
+              return (
+                <div data-game-page={pageNumber} hidden={pageNumber !== 1}>
+                  <GameCard game={game} />
+                </div>
+              );
+            })}
+          </div>
+
+          <nav
+            class="mt-8 flex flex-wrap items-center justify-center gap-3"
+            aria-label="Game list pagination"
+            data-testid="pagination"
+          >
+            <button
+              type="button"
+              data-testid="pagination-previous"
+              data-page-action="previous"
+              class="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-medium text-slate-200 transition-colors duration-200 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              aria-label="Go to previous page"
+            >
+              Previous
+            </button>
+
+            {Array.from({ length: totalPages }, (_, index) => {
+              const pageNumber = index + 1;
+              const isCurrent = pageNumber === 1;
+
+              return (
+                <button
+                  type="button"
+                  data-testid={`pagination-page-${pageNumber}`}
+                  data-page-number={pageNumber}
+                  class:list={[
+                    'min-w-10 rounded-lg border px-3 py-2 text-sm font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500',
+                    isCurrent
+                      ? 'border-blue-500 bg-blue-600 text-slate-50'
+                      : 'border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700',
+                  ]}
+                  aria-label={`Go to page ${pageNumber}`}
+                  aria-current={isCurrent ? 'page' : 'false'}
+                >
+                  {pageNumber}
+                </button>
+              );
+            })}
+
+            <button
+              type="button"
+              data-testid="pagination-next"
+              data-page-action="next"
+              class="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-medium text-slate-200 transition-colors duration-200 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              aria-label="Go to next page"
+            >
+              Next
+            </button>
+          </nav>
+
+          <p
+            data-testid="pagination-summary"
+            class="mt-3 text-center text-sm text-slate-300"
+            aria-live="polite"
+          >
+            Showing 1-{Math.min(DEFAULT_PAGE_SIZE, games.length)} of {games.length} games
+          </p>
+        </>
       )}
     </div>
   </div>
 </Layout>
+
+<script>
+  const grid = document.querySelector<HTMLElement>('[data-testid="games-grid"]');
+  const cards = Array.from(document.querySelectorAll<HTMLElement>('[data-game-page]'));
+  const pageButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-page-number]'));
+  const previousButton = document.querySelector<HTMLButtonElement>('[data-page-action="previous"]');
+  const nextButton = document.querySelector<HTMLButtonElement>('[data-page-action="next"]');
+  const summary = document.querySelector<HTMLElement>('[data-testid="pagination-summary"]');
+
+  if (grid && cards.length > 0 && pageButtons.length > 0 && previousButton && nextButton && summary) {
+    const totalPages = Number(grid.dataset.totalPages ?? '1');
+    const pageSize = Number(grid.dataset.pageSize ?? '6');
+    const totalGames = cards.length;
+    let currentPage = 1;
+
+    function applyPage(targetPage: number): void {
+      const safePage = Math.min(Math.max(targetPage, 1), totalPages);
+      currentPage = safePage;
+
+      cards.forEach((card) => {
+        const isVisible = Number(card.dataset.gamePage) === safePage;
+        card.hidden = !isVisible;
+      });
+
+      pageButtons.forEach((button) => {
+        const pageNumber = Number(button.dataset.pageNumber);
+        const isCurrent = pageNumber === safePage;
+
+        button.disabled = isCurrent;
+        button.setAttribute('aria-current', isCurrent ? 'page' : 'false');
+        button.classList.toggle('border-blue-500', isCurrent);
+        button.classList.toggle('bg-blue-600', isCurrent);
+        button.classList.toggle('text-slate-50', isCurrent);
+        button.classList.toggle('border-slate-700', !isCurrent);
+        button.classList.toggle('bg-slate-800', !isCurrent);
+        button.classList.toggle('text-slate-200', !isCurrent);
+      });
+
+      previousButton!.disabled = safePage === 1;
+      nextButton!.disabled = safePage === totalPages;
+
+      const start = (safePage - 1) * pageSize + 1;
+      const end = Math.min(safePage * pageSize, totalGames);
+      summary!.textContent = `Showing ${start}-${end} of ${totalGames} games`;
+      const searchParams = new URLSearchParams(window.location.search);
+      if (safePage === 1) {
+        searchParams.delete('page');
+      } else {
+        searchParams.set('page', String(safePage));
+      }
+      const query = searchParams.toString();
+      const nextUrl = `${window.location.pathname}${query ? `?${query}` : ''}`;
+      window.history.replaceState({}, '', nextUrl);
+    }
+
+    const initialPage = Number(new URLSearchParams(window.location.search).get('page') ?? '1');
+    applyPage(initialPage || 1);
+
+    pageButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        applyPage(Number(button.dataset.pageNumber));
+      });
+    });
+
+    previousButton.addEventListener('click', () => {
+      applyPage(currentPage - 1);
+    });
+
+    nextButton.addEventListener('click', () => {
+      applyPage(currentPage + 1);
+    });
+  }
+</script>
