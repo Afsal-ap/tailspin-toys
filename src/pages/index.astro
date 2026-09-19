@@ -105,12 +105,12 @@ const totalPages = Math.max(1, Math.ceil(games.length / DEFAULT_PAGE_SIZE));
 </Layout>
 
 <script>
-  const grid = document.querySelector('[data-testid="games-grid"]');
-  const cards = Array.from(document.querySelectorAll('[data-game-page]'));
-  const pageButtons = Array.from(document.querySelectorAll('[data-page-number]'));
-  const previousButton = document.querySelector('[data-page-action="previous"]');
-  const nextButton = document.querySelector('[data-page-action="next"]');
-  const summary = document.querySelector('[data-testid="pagination-summary"]');
+  const grid = document.querySelector<HTMLElement>('[data-testid="games-grid"]');
+  const cards = Array.from(document.querySelectorAll<HTMLElement>('[data-game-page]'));
+  const pageButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-page-number]'));
+  const previousButton = document.querySelector<HTMLButtonElement>('[data-page-action="previous"]');
+  const nextButton = document.querySelector<HTMLButtonElement>('[data-page-action="next"]');
+  const summary = document.querySelector<HTMLElement>('[data-testid="pagination-summary"]');
 
   if (grid && cards.length > 0 && pageButtons.length > 0 && previousButton && nextButton && summary) {
     const totalPages = Number(grid.dataset.totalPages ?? '1');
@@ -118,7 +118,7 @@ const totalPages = Math.max(1, Math.ceil(games.length / DEFAULT_PAGE_SIZE));
     const totalGames = cards.length;
     let currentPage = 1;
 
-    function applyPage(targetPage) {
+    function applyPage(targetPage: number): void {
       const safePage = Math.min(Math.max(targetPage, 1), totalPages);
       currentPage = safePage;
 
@@ -141,15 +141,20 @@ const totalPages = Math.max(1, Math.ceil(games.length / DEFAULT_PAGE_SIZE));
         button.classList.toggle('text-slate-200', !isCurrent);
       });
 
-      previousButton.disabled = safePage === 1;
-      nextButton.disabled = safePage === totalPages;
+      previousButton!.disabled = safePage === 1;
+      nextButton!.disabled = safePage === totalPages;
 
       const start = (safePage - 1) * pageSize + 1;
       const end = Math.min(safePage * pageSize, totalGames);
-      summary.textContent = `Showing ${start}-${end} of ${totalGames} games`;
+      summary!.textContent = `Showing ${start}-${end} of ${totalGames} games`;
       const searchParams = new URLSearchParams(window.location.search);
-      searchParams.set('page', String(safePage));
-      const nextUrl = `${window.location.pathname}?${searchParams.toString()}`;
+      if (safePage === 1) {
+        searchParams.delete('page');
+      } else {
+        searchParams.set('page', String(safePage));
+      }
+      const query = searchParams.toString();
+      const nextUrl = `${window.location.pathname}${query ? `?${query}` : ''}`;
       window.history.replaceState({}, '', nextUrl);
     }
 
