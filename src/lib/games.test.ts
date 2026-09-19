@@ -6,6 +6,7 @@ import {
     getAllGames,
     getAllGameIds,
     getGameById,
+    getGamesPage,
 } from './games';
 
 async function seedGames(db: Database, count: number): Promise<void> {
@@ -43,6 +44,29 @@ describe('games data-access helpers', () => {
         expect(all.map((g) => g.title)).toEqual(['Game 01', 'Game 02', 'Game 03']);
         expect(all[0].category).toEqual({ id: expect.any(Number), name: 'Strategy' });
         expect(all[0].publisher).toEqual({ id: expect.any(Number), name: 'Pub One' });
+    });
+
+    it('returns paginated game results with total metadata', async () => {
+        await seedGames(db, 5);
+
+        const pageOne = await getGamesPage(db, 1, 2);
+        expect(pageOne.page).toBe(1);
+        expect(pageOne.pageSize).toBe(2);
+        expect(pageOne.totalGames).toBe(5);
+        expect(pageOne.totalPages).toBe(3);
+        expect(pageOne.games.map((game) => game.title)).toEqual(['Game 01', 'Game 02']);
+
+        const pageTwo = await getGamesPage(db, 2, 2);
+        expect(pageTwo.page).toBe(2);
+        expect(pageTwo.games.map((game) => game.title)).toEqual(['Game 03', 'Game 04']);
+    });
+
+    it('clamps page requests to the last valid page', async () => {
+        await seedGames(db, 3);
+
+        const page = await getGamesPage(db, 99, 2);
+        expect(page.page).toBe(2);
+        expect(page.games.map((game) => game.title)).toEqual(['Game 03']);
     });
 
     it('returns all game ids ordered by title', async () => {
